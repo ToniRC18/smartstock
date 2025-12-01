@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
+use App\Models\CardRequest;
 use App\Models\Client;
 use App\Models\ClientContract;
 use App\Models\ContractAllocation;
 use App\Models\Product;
+use App\Models\Shipment;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Schema;
 
@@ -17,6 +19,8 @@ class SmartStockSeeder extends Seeder
     {
         Schema::disableForeignKeyConstraints();
         ContractAllocation::truncate();
+        Shipment::truncate();
+        CardRequest::truncate();
         ClientContract::truncate();
         Product::truncate();
         Client::truncate();
@@ -28,6 +32,7 @@ class SmartStockSeeder extends Seeder
         $this->ensureBaseProducts();
         $this->seedSyntheticContracts();
         $this->seedAllocations();
+        $this->seedSampleRequests();
     }
 
     private function seedClients(string $path): void
@@ -175,6 +180,67 @@ class SmartStockSeeder extends Seeder
                 ]);
             }
         });
+    }
+
+    /**
+     * Seed sample card requests and shipments for demo flows.
+     */
+    private function seedSampleRequests(): void
+    {
+        $clients = Client::with(['contracts', 'contracts.product'])->take(2)->get();
+
+        foreach ($clients as $client) {
+            $contract = $client->contracts->first();
+            if (!$contract) {
+                continue;
+            }
+
+            $productId = $contract->product_id;
+
+            CardRequest::create([
+                'client_id' => $client->id,
+                'contract_id' => $contract->id,
+                'product_id' => $productId,
+                'reason' => 'new_employee',
+                'quantity' => 15,
+                'notes' => 'Nuevas altas de personal',
+                'status' => 'pending',
+            ]);
+
+            $approved = CardRequest::create([
+                'client_id' => $client->id,
+                'contract_id' => $contract->id,
+                'product_id' => $productId,
+                'reason' => 'expired',
+                'quantity' => 10,
+                'notes' => 'Reposición por vencimiento',
+                'status' => 'approved',
+                'admin_note' => 'Procesando reposición',
+            ]);
+
+            Shipment::create([
+                'card_request_id' => $approved->id,
+                'tracking_code' => 'SS-DEMO-' . $client->id,
+                'status' => 'en_ruta',
+                'eta_date' => now()->addDays(2)->toDateString(),
+            ]);
+
+            CardRequest::create([
+                'client_id' => $client->id,
+                'contract_id' => $contract->id,
+                'product_id' => $productId,
+                'reason' => 'lost',
+                'quantity' => 1200,
+                'notes' => 'Pedido masivo',
+                'status' => 'rejected',
+                'admin_note' => 'Excede límite disponible, ajuste solicitado.',
+            ]);
+
+            $product = $contract->product;
+            if ($product && $product->stock_current > 10) {
+                $product->decrement('stock_current', 10);
+            }
+        }
     }
 
     /**

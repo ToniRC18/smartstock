@@ -11,6 +11,7 @@
         <nav class="flex-1 px-4 py-6 space-y-3 text-sm">
             <button data-view="overview" class="w-full text-left px-3 py-2 rounded-lg bg-white/10 text-white font-medium">Dashboard</button>
             <button data-view="requests" class="w-full text-left px-3 py-2 rounded-lg text-slate-300 hover:bg-white/5">Solicitudes</button>
+            <button data-view="shipments" class="w-full text-left px-3 py-2 rounded-lg text-slate-300 hover:bg-white/5">Envíos</button>
         </nav>
         <div class="px-4 py-4 border-t border-slate-800 text-xs text-slate-400">
             Sesión segura
@@ -139,6 +140,7 @@
                                 <th class="px-6 py-3">Motivo</th>
                                 <th class="px-6 py-3">Cantidad</th>
                                 <th class="px-6 py-3">Estado</th>
+                                <th class="px-6 py-3">Tracking</th>
                                 <th class="px-6 py-3">Nota</th>
                             </tr>
                         </thead>
@@ -157,13 +159,66 @@
                                     </td>
                                     <td class="px-6 py-3">{{ $request->quantity }}</td>
                                     <td class="px-6 py-3">
-                                        <span class="px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">{{ ucfirst($request->status) }}</span>
+                                        <span class="px-3 py-1 rounded-full text-xs font-semibold
+                                            @if($request->status === 'approved') bg-ss-emerald/15 text-ss-emerald
+                                            @elseif($request->status === 'rejected') bg-amber-100 text-amber-700
+                                            @else bg-slate-100 text-slate-700 @endif">
+                                            {{ ucfirst($request->status) }}
+                                        </span>
+                                    </td>
+                                    <td class="px-6 py-3 text-xs text-slate-600">
+                                        @if($request->shipment)
+                                            <a class="text-ss-emerald font-semibold" href="/tracking/{{ $request->shipment->tracking_code }}">#{{ $request->shipment->tracking_code }}</a>
+                                        @else
+                                            —
+                                        @endif
                                     </td>
                                     <td class="px-6 py-3 text-xs text-slate-600">{{ $request->admin_note ?? '—' }}</td>
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="6" class="px-6 py-4 text-center text-slate-500">Aún no hay solicitudes.</td>
+                                    <td colspan="7" class="px-6 py-4 text-center text-slate-500">Aún no hay solicitudes.</td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section data-section="shipments" class="hidden space-y-6">
+            <div class="bg-white border border-slate-200 rounded-xl shadow-sm">
+                <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+                    <div>
+                        <p class="text-sm text-slate-500">Envíos</p>
+                        <h3 class="text-lg font-semibold text-slate-900">Seguimiento</h3>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm text-slate-700">
+                        <thead class="bg-slate-50 text-slate-500">
+                            <tr>
+                                <th class="px-6 py-3">Tracking</th>
+                                <th class="px-6 py-3">Producto</th>
+                                <th class="px-6 py-3">Estado</th>
+                                <th class="px-6 py-3">ETA</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse ($shipments as $shipment)
+                                <tr class="border-t border-slate-100">
+                                    <td class="px-6 py-3 font-semibold text-slate-900">
+                                        <a class="text-ss-emerald" href="/tracking/{{ $shipment->tracking_code }}">#{{ $shipment->tracking_code }}</a>
+                                    </td>
+                                    <td class="px-6 py-3">{{ $shipment->request->product->name ?? 'Producto' }}</td>
+                                    <td class="px-6 py-3 capitalize">
+                                        <span class="px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">{{ str_replace('_', ' ', $shipment->status) }}</span>
+                                    </td>
+                                    <td class="px-6 py-3 text-slate-600">{{ $shipment->eta_date ?? 'Pendiente' }}</td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="4" class="px-6 py-4 text-center text-slate-500">Aún no hay envíos.</td>
                                 </tr>
                             @endforelse
                         </tbody>
@@ -187,6 +242,11 @@
         <form action="{{ route('dashboard.requests.store') }}" method="POST" class="space-y-4">
             @csrf
             <input type="hidden" name="client_id" value="{{ $clientId }}">
+            @if ($errors->any())
+                <div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+                    {{ $errors->first() }}
+                </div>
+            @endif
             <div>
                 <label class="text-sm text-slate-600">Contrato</label>
                 <select name="contract_id" class="w-full mt-1 rounded-lg border border-slate-200 px-3 py-2 text-sm" required>

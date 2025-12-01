@@ -7,6 +7,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class CardRequest extends Model
 {
@@ -45,5 +46,13 @@ class CardRequest extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
+    }
+
+    /**
+     * Shipment generated when request is approved.
+     */
+    public function shipment(): HasOne
+    {
+        return $this->hasOne(Shipment::class, 'card_request_id');
     }
 }

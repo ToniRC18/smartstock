@@ -8,6 +8,7 @@ use App\Models\Client;
 use App\Models\ClientContract;
 use App\Models\Product;
 use App\Models\CardRequest;
+use App\Models\Shipment;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -36,10 +37,15 @@ class DashboardController extends Controller
 
         $products = Product::all();
 
-        $requests = CardRequest::with('product')
+        $requests = CardRequest::with(['product', 'shipment'])
             ->where('client_id', $clientId)
             ->latest()
             ->take(5)
+            ->get();
+
+        $shipments = Shipment::with(['request.product'])
+            ->whereHas('request', fn ($q) => $q->where('client_id', $clientId))
+            ->latest()
             ->get();
 
         return view('dashboard', [
@@ -48,6 +54,7 @@ class DashboardController extends Controller
             'products' => $products,
             'clientId' => $clientId,
             'requests' => $requests,
+            'shipments' => $shipments,
         ]);
     }
 
@@ -65,7 +72,7 @@ class DashboardController extends Controller
             ->take(5)
             ->get();
 
-        $requestsByClient = CardRequest::with(['client', 'product', 'contract'])
+        $requestsByClient = CardRequest::with(['client', 'product', 'contract', 'shipment'])
             ->orderByDesc('created_at')
             ->get()
             ->groupBy('client_id');
@@ -75,6 +82,8 @@ class DashboardController extends Controller
                 $contract = $req->contract;
                 return [
                     'id' => $req->id,
+                    'client_id' => $req->client_id,
+                    'client_name' => $req->client?->name,
                     'product' => $req->product->name ?? 'Producto',
                     'reason' => $req->reason,
                     'quantity' => $req->quantity,
@@ -87,17 +96,26 @@ class DashboardController extends Controller
                         'expired' => $contract->card_expired_amount,
                         'available' => $contract->availableForNewAssignments(),
                     ] : null,
+                    'tracking' => $req->shipment?->tracking_code,
                     'admin_note' => $req->admin_note,
                     'notes' => $req->notes,
                 ];
             })->toArray();
         })->toArray();
 
+        $products = Product::all();
+
+        $shipments = Shipment::with(['request.client', 'request.product'])
+            ->orderByDesc('created_at')
+            ->get();
+
         return view('dashboard-admin', [
             'clients' => $clients,
             'criticalProducts' => $criticalProducts,
             'worstContracts' => $worstContracts,
             'requestsByClient' => $requestsByClientArray,
+            'products' => $products,
+            'shipments' => $shipments,
         ]);
     }
 }

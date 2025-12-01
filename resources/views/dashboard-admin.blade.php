@@ -35,6 +35,7 @@
         <nav class="flex-1 px-4 py-6 space-y-3 text-sm">
             <button data-view="empresas" class="w-full text-left px-3 py-2 rounded-lg bg-white/10 text-white font-medium">Empresas</button>
             <button data-view="solicitudes" class="w-full text-left px-3 py-2 rounded-lg text-slate-300 hover:bg-white/5">Solicitudes</button>
+            <button data-view="envios" class="w-full text-left px-3 py-2 rounded-lg text-slate-300 hover:bg-white/5">Envíos</button>
             <span class="block px-3 py-2 rounded-lg text-slate-400">Alertas</span>
             <span class="block px-3 py-2 rounded-lg text-slate-400">Stock</span>
         </nav>
@@ -162,6 +163,102 @@
                     <div class="px-6 py-4 text-center text-slate-500">Selecciona una empresa para ver solicitudes.</div>
                 </div>
             </div>
+
+            <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+                    <div>
+                        <p class="text-sm text-slate-500">Inventario</p>
+                        <h3 class="text-lg font-semibold text-slate-900">Stock por producto</h3>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm text-slate-700">
+                        <thead class="bg-slate-50 text-slate-500">
+                            <tr>
+                                <th class="px-6 py-3">Producto</th>
+                                <th class="px-6 py-3">Stock actual</th>
+                                <th class="px-6 py-3">Mínimo</th>
+                                <th class="px-6 py-3">Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (($products ?? []) as $product)
+                                @php
+                                    $isCritical = $product->isStockCritical();
+                                @endphp
+                                <tr class="border-t border-slate-100">
+                                    <td class="px-6 py-3 font-semibold text-slate-900">{{ $product->name }}</td>
+                                    <td class="px-6 py-3">{{ $product->stock_current }}</td>
+                                    <td class="px-6 py-3">{{ $product->stock_minimum }}</td>
+                                    <td class="px-6 py-3">
+                                        <span class="px-3 py-1 rounded-full text-xs font-semibold
+                                            {{ $isCritical ? 'bg-amber-100 text-amber-700' : 'bg-ss-emerald/15 text-ss-emerald' }}">
+                                            {{ $isCritical ? 'Crítico' : 'Sano' }}
+                                        </span>
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section data-section="envios" class="hidden space-y-6">
+            <div class="bg-white border border-slate-200 rounded-xl shadow-sm">
+                <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+                    <div>
+                        <p class="text-sm text-slate-500">Envíos</p>
+                        <h3 class="text-lg font-semibold text-slate-900">Pendientes y activos</h3>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm text-slate-700">
+                        <thead class="bg-slate-50 text-slate-500">
+                            <tr>
+                                <th class="px-6 py-3">Empresa</th>
+                                <th class="px-6 py-3">Tracking</th>
+                                <th class="px-6 py-3">Producto</th>
+                                <th class="px-6 py-3">Estado</th>
+                                <th class="px-6 py-3">ETA</th>
+                                <th class="px-6 py-3">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse (($shipments ?? []) as $shipment)
+                                <tr class="border-t border-slate-100">
+                                    <td class="px-6 py-3">{{ $shipment->request->client->name ?? 'Empresa' }}</td>
+                                    <td class="px-6 py-3 font-semibold text-ss-emerald">#{{ $shipment->tracking_code }}</td>
+                                    <td class="px-6 py-3">{{ $shipment->request->product->name ?? 'Producto' }}</td>
+                                    <td class="px-6 py-3 capitalize">
+                                        <span class="px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">{{ str_replace('_', ' ', $shipment->status) }}</span>
+                                    </td>
+                                    <td class="px-6 py-3 text-slate-600">{{ $shipment->eta_date ?? 'Pendiente' }}</td>
+                                    <td class="px-6 py-3">
+                                        <form action="{{ route('admin.shipments.update', $shipment) }}" method="POST" class="flex flex-wrap gap-2 items-center">
+                                            @csrf
+                                            @method('PATCH')
+                                            <input name="tracking_code" value="{{ $shipment->tracking_code }}" class="rounded-lg border border-slate-200 px-2 py-1 text-xs" />
+                                            <select name="status" class="rounded-lg border border-slate-200 px-2 py-1 text-xs">
+                                                <option value="pendiente_envio" @selected($shipment->status === 'pendiente_envio')>Pendiente envío</option>
+                                                <option value="preparacion" @selected($shipment->status === 'preparacion')>Preparación</option>
+                                                <option value="en_ruta" @selected($shipment->status === 'en_ruta')>En ruta</option>
+                                                <option value="entregado" @selected($shipment->status === 'entregado')>Entregado</option>
+                                            </select>
+                                            <input type="date" name="eta_date" value="{{ $shipment->eta_date }}" class="rounded-lg border border-slate-200 px-2 py-1 text-xs" />
+                                            <button type="submit" class="px-3 py-1 rounded-lg bg-ss-emerald text-white text-xs font-semibold">Actualizar</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="6" class="px-6 py-4 text-center text-slate-500">No hay envíos registrados.</td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </section>
     </main>
 </div>
@@ -183,6 +280,8 @@
             <div><span class="text-slate-500">Cantidad:</span> <span id="modal-req-quantity" class="font-semibold"></span></div>
             <div><span class="text-slate-500">Notas del cliente:</span> <span id="modal-req-notes" class="font-semibold"></span></div>
             <div><span class="text-slate-500">Estado actual:</span> <span id="modal-req-status" class="font-semibold"></span></div>
+            <div><span class="text-slate-500">Tracking:</span> <span id="modal-req-tracking" class="font-semibold text-ss-emerald"></span></div>
+            <div><span class="text-slate-500">Nota admin:</span> <span id="modal-req-admin-note" class="font-semibold"></span></div>
         </div>
         <div id="modal-contract-summary" class="grid grid-cols-5 gap-3 bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs">
             <div><p class="text-slate-500">Límite</p><p id="modal-contract-limit" class="text-lg font-semibold text-slate-900">-</p></div>
@@ -237,6 +336,8 @@
         const modalQuantity = document.getElementById('modal-req-quantity');
         const modalNotes = document.getElementById('modal-req-notes');
         const modalStatus = document.getElementById('modal-req-status');
+        const modalTracking = document.getElementById('modal-req-tracking');
+        const modalAdminNote = document.getElementById('modal-req-admin-note');
         const modalLimit = document.getElementById('modal-contract-limit');
         const modalCurrent = document.getElementById('modal-contract-current');
         const modalInactive = document.getElementById('modal-contract-inactive');
@@ -244,6 +345,7 @@
         const modalAvailable = document.getElementById('modal-contract-available');
         const approveForm = document.getElementById('modal-approve-form');
         const rejectForm = document.getElementById('modal-reject-form');
+        const rejectNoteInput = rejectForm.querySelector('input[name="admin_note"]');
 
         function render(clientId) {
             const client = clientsData.find(c => c.id === clientId);
@@ -302,7 +404,7 @@
                 wrapper.setAttribute('data-req-id', req.id);
                 wrapper.innerHTML = `
                     <div class="space-y-1">
-                        <p class="text-sm font-semibold text-slate-900">Solicitud #${req.id} · ${req.product}</p>
+                        <p class="text-sm font-semibold text-slate-900">${req.client_name || 'Empresa'} · Solicitud #${req.id} · ${req.product}</p>
                         <p class="text-xs text-slate-600">Motivo: ${reasonLabel(req.reason)} · Cantidad: ${req.quantity} · Contrato #${req.contract ?? '-'}</p>
                         <p class="text-xs text-slate-500">Estado: ${req.status} ${req.admin_note ? ' · Nota: ' + req.admin_note : ''}</p>
                     </div>
@@ -321,6 +423,9 @@
             modalQuantity.textContent = req.quantity;
             modalNotes.textContent = req.notes || '—';
             modalStatus.textContent = capitalize(req.status);
+            rejectNoteInput.value = req.admin_note || '';
+            modalTracking.textContent = req.tracking ? req.tracking : '—';
+            modalAdminNote.textContent = req.admin_note || '—';
 
             if (req.contract_info) {
                 modalLimit.textContent = req.contract_info.limit;
