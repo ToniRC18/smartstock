@@ -13,7 +13,10 @@
                 <p class="text-sm text-slate-500">Control ágil de tarjetas</p>
             </div>
         </div>
-        <a href="/dashboard" class="text-sm font-medium text-slate-700 hover:text-ss-emerald transition-colors">Ir al Dashboard</a>
+        <nav class="flex items-center gap-3 text-sm font-medium text-slate-700">
+            <a href="/dashboard" class="px-3 py-2 rounded-lg hover:text-ss-emerald hover:bg-ss-emerald/10 transition-colors">Dashboard empresas</a>
+            <a href="/admin/dashboard" class="px-3 py-2 rounded-lg hover:text-ss-emerald hover:bg-ss-emerald/10 transition-colors">Dashboard admin</a>
+        </nav>
     </header>
 
     <main class="flex-1 flex flex-col gap-14 px-8 md:px-12 lg:px-20 py-12">
