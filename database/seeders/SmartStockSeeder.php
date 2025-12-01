@@ -6,6 +6,7 @@ namespace Database\Seeders;
 
 use App\Models\Client;
 use App\Models\ClientContract;
+use App\Models\ContractAllocation;
 use App\Models\Product;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Schema;
@@ -15,6 +16,7 @@ class SmartStockSeeder extends Seeder
     public function run(): void
     {
         Schema::disableForeignKeyConstraints();
+        ContractAllocation::truncate();
         ClientContract::truncate();
         Product::truncate();
         Client::truncate();
@@ -23,6 +25,9 @@ class SmartStockSeeder extends Seeder
         $this->seedClients(base_path('database/seeders/data/tabla_clientes.csv'));
         $this->seedProducts(base_path('database/seeders/data/productos.csv'));
         $this->seedContracts(base_path('database/seeders/data/contratos_clientes.csv'));
+        $this->ensureBaseProducts();
+        $this->seedSyntheticContracts();
+        $this->seedAllocations();
     }
 
     private function seedClients(string $path): void
@@ -60,8 +65,116 @@ class SmartStockSeeder extends Seeder
                 'card_limit_amount' => (int) $limit,
                 'card_current_amount' => (int) $current,
                 'card_inactive_amount' => (int) $inactive,
+                'card_expired_amount' => random_int(0, max(0, (int) $inactive)),
             ]);
         }
+    }
+
+    /**
+     * Ensure core product types exist even if the CSV lacks them.
+     */
+    private function ensureBaseProducts(): void
+    {
+        $baseProducts = [
+            'Combustible',
+            'Despensa',
+            'Premios',
+        ];
+
+        foreach ($baseProducts as $name) {
+            Product::firstOrCreate(
+                ['name' => $name],
+                [
+                    'stock_current' => random_int(100, 400),
+                    'stock_minimum' => random_int(30, 80),
+                ]
+            );
+        }
+    }
+
+    /**
+     * Create synthetic contracts per client/product type to have data to show.
+     */
+    private function seedSyntheticContracts(): void
+    {
+        $products = Product::whereIn('name', ['Combustible', 'Despensa', 'Premios'])->get();
+
+        Client::all()->each(function (Client $client) use ($products) {
+            foreach ($products as $product) {
+                $exists = ClientContract::where('client_id', $client->id)
+                    ->where('product_id', $product->id)
+                    ->exists();
+
+                if ($exists) {
+                    continue;
+                }
+
+                $limit = random_int(30, 150);
+                $inUse = random_int(10, $limit);
+                $inactive = random_int(0, max(0, $limit - $inUse));
+                $expired = random_int(0, max(0, (int) floor($inactive / 2)));
+
+                ClientContract::create([
+                    'client_id' => $client->id,
+                    'product_id' => $product->id,
+                    'card_limit_amount' => $limit,
+                    'card_current_amount' => $inUse,
+                    'card_inactive_amount' => $inactive,
+                    'card_expired_amount' => $expired,
+                ]);
+            }
+        });
+    }
+
+    /**
+     * Split each contract into allocations across the three base products (synthetic).
+     */
+    private function seedAllocations(): void
+    {
+        $productIds = Product::whereIn('name', ['Combustible', 'Despensa', 'Premios'])->pluck('id')->values();
+
+        ClientContract::all()->each(function (ClientContract $contract) use ($productIds) {
+            if ($productIds->isEmpty()) {
+                return;
+            }
+
+            $splits = function (int $total) {
+                $parts = [random_int(0, $total), random_int(0, $total), random_int(0, $total)];
+                $sum = array_sum($parts);
+                if ($sum === 0) {
+                    return [0, 0, 0];
+                }
+                return array_map(fn ($p) => (int) floor(($p / $sum) * $total), $parts);
+            };
+
+            $limits = $splits((int) $contract->card_limit_amount);
+            $current = $splits((int) $contract->card_current_amount);
+            $inactive = $splits((int) $contract->card_inactive_amount);
+            $expired = $splits((int) $contract->card_expired_amount);
+
+            // Adjust last element to ensure sums match totals.
+            $fixSum = function (array $values, int $target): array {
+                $diff = $target - array_sum($values);
+                $values[2] = max(0, $values[2] + $diff);
+                return $values;
+            };
+
+            $limits = $fixSum($limits, (int) $contract->card_limit_amount);
+            $current = $fixSum($current, (int) $contract->card_current_amount);
+            $inactive = $fixSum($inactive, (int) $contract->card_inactive_amount);
+            $expired = $fixSum($expired, (int) $contract->card_expired_amount);
+
+            foreach ($productIds as $idx => $productId) {
+                ContractAllocation::create([
+                    'client_contract_id' => $contract->id,
+                    'product_id' => $productId,
+                    'card_limit_amount' => $limits[$idx] ?? 0,
+                    'card_current_amount' => $current[$idx] ?? 0,
+                    'card_inactive_amount' => $inactive[$idx] ?? 0,
+                    'card_expired_amount' => $expired[$idx] ?? 0,
+                ]);
+            }
+        });
     }
 
     /**
