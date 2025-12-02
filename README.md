@@ -1,59 +1,80 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# SmartStock – Prototipo Hackatón
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+## 1. Nombre del Equipo
+SmartStock Hackers (actualiza con el nombre oficial de tu equipo si cambia).
 
-## About Laravel
+## 2. Integrantes del Equipo
+- Nombre Integrante 1 — Carrera — Rol (Ej. Backend)
+- Nombre Integrante 2 — Carrera — Rol (Ej. Frontend/UX)
+- Nombre Integrante 3 — Carrera — Rol (Ej. Datos/Producto)
+*(Reemplaza con los nombres reales de tu equipo.)*
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## 3. Objetivo del Proyecto (El “Por Qué”)
+Reducir acaparamiento y quiebres de stock de tarjetas corporativas conectando límites de contrato, uso real e inventario para autorizar o rechazar solicitudes con datos.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## 4. Solución Propuesta (El “Qué”)
+Prototipo web que centraliza contratos, solicitudes y envíos: valida límites por producto/contrato, descuenta stock, genera tracking, muestra dashboards para cliente y admin, y proyecta stock (demo) según demanda y vencimientos.
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## 5. Stack Tecnológico
+- Backend: PHP 8.2, Laravel 10/11
+- Frontend: Blade + Tailwind CDN
+- Base de datos: SQLite (dev) / migraciones Laravel
+- Semillas: CSV proporcionados (clientes, productos, contratos)
 
-## Learning Laravel
+## 6. Uso de IA
+No se usa IA en backend; la “proyección inteligente” de stock es una demo estática en UI. Se puede integrar un modelo (pronóstico de demanda) en futuro usando los mismos puntos de validación.
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+Prototipo funcional para controlar tarjetas corporativas (Combustible, Despensa, Premios) con reglas de límite por contrato, control de inactivas y stock, solicitudes y envíos con tracking. Está pensado para demo/hackatón: sin roles ni autenticación; datos cargados vía seed/CSV.
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+## Requisitos rápidos
+- PHP 8.2+, Composer
+- SQLite (archivo `database/database.sqlite`)
 
-## Laravel Sponsors
+## Instalación y datos
+```bash
+composer install
+touch database/database.sqlite
+php artisan migrate --seed
+php artisan serve
+```
+Semillas: carga clientes/productos/contratos desde CSV (`database/seeders/data/*.csv`) y genera solicitudes/envíos de ejemplo.
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+## Rutas clave
+- Landing: `/`
+- Dashboard empresa: `/dashboard?client_id=1` (selector de cliente en UI)
+- Dashboard admin: `/admin/dashboard`
+- Tracking: `/tracking/{code}` (ej. `SS-DEMO-1`)
 
-### Premium Partners
+## Funcionalidad principal
+- **Contratos**: un contrato agrupa los 3 productos; cada contrato tiene allocations por producto (límite, uso, inactivas, vencidas).
+- **Solicitudes/Órdenes**: motivos `expired`, `lost`, `new_employee`; validan límite total y disponible por producto (considerando inactivas). Simulación `/simular-pedido` responde aprobado/advertencia/rechazado con máximo permitido.
+- **Pedidos**: creación `/crear-pedido` genera Order con tracking, fecha estimada (hoy +2), descuenta stock y suma tarjetas en uso; estados `pendiente → preparando → en_ruta → entregado` o `rechazado`.
+- **Aprobación**: descuenta stock, genera envío con tracking y ETA; bloqueo si deja stock insuficiente o excede disponible.
+- **Envíos**: estados `pendiente_envio`, `preparacion`, `en_ruta`, `entregado`; editable en admin; tracking visible para cliente.
+- **Inventario admin**: stock actual, pendientes, proyección (stock - pendientes) y mínimos; badges de crítico y proyección baja.
+- **CRUD básico admin**:
+  - Crear empresa + contrato base (modal).
+  - Crear contrato adicional para empresa (modal en detalle).
+  - Ajustar stock y mínimo por producto (inline en inventario).
+  - Filtrar solicitudes por estado/empresa; filtros se mantienen con localStorage.
+- **UX**: mensajes flash se ocultan a los 1s; tabs recuerdan la última vista; warnings en formularios; botones de regreso en detalle de empresa.
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+## Cómo probar rápido
+1) `php artisan serve`
+2) Admin: `/admin/dashboard` → pestaña Empresas (agrega empresa/contrato), Solicitudes (filtros), Envíos (edita tracking), Inventario (ajusta stock).
+3) Cliente: `/dashboard?client_id=1` → pestaña Solicitudes (form con disponible por producto) y Envíos; cambia de cliente con el selector.
+4) Tracking: `/tracking/SS-DEMO-1`.
 
-## Contributing
+## Limitaciones conocidas (prototipo)
+- Sin autenticación/roles.
+- Tailwind via CDN (warning de producción esperado; aceptable para demo).
+- Sin reservas de stock ni saldo real por tarjeta (solo conteo).
+- Seeds mezclan CSV + datos sintéticos para demo.
+- Sin tests automatizados.
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
-
-## Code of Conduct
-
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
-
-## Security Vulnerabilities
-
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
-
-## License
-
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+## Próximos pasos sugeridos
+- Auth y roles (admin/cliente).
+- Limpieza de seeds y datos 100% alineados a CSV reales.
+- Reserva de stock/pipeline y alertas automáticas.
+- Logs y auditoría de aprobaciones/rechazos.
+- UI: timeline en envíos, toasts, duplicar solicitudes, exportación.

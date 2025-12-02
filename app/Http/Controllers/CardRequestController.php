@@ -35,13 +35,10 @@ class CardRequestController extends Controller
         }
 
         $product = Product::findOrFail($validated['product_id']);
-        if ($product->id !== $contract->product_id) {
-            return back()->withErrors(['product_id' => 'El producto debe coincidir con el contrato seleccionado.'])->withInput();
-        }
         $quantity = (int) $validated['quantity'];
         $reason = $validated['reason'];
 
-        // Disponibilidad por producto (allocation)
+        // Disponibilidad por producto (allocation) en el contrato seleccionado.
         $allocation = ContractAllocation::where('client_contract_id', $contract->id)
             ->where('product_id', $product->id)
             ->first();
@@ -52,14 +49,18 @@ class CardRequestController extends Controller
             if ($allocation->card_inactive_amount > 0) {
                 $availableByProduct = min($availableByProduct, (int) $allocation->card_current_amount);
             }
-            if ($quantity > $availableByProduct) {
-                return back()->withErrors(['quantity' => 'Excede el disponible por producto en este contrato.'])->withInput();
+        } elseif ($contract->product_id === $product->id) {
+            // Soporte para contratos “legacy” de 1 producto sin allocations.
+            $availableByProduct = max(0, (int) $contract->card_limit_amount - (int) $contract->card_current_amount - (int) $contract->card_expired_amount);
+            if ($contract->card_inactive_amount > 0) {
+                $availableByProduct = min($availableByProduct, (int) $contract->card_current_amount);
             }
+        } else {
+            return back()->withErrors(['product_id' => 'El contrato no incluye este producto.'])->withInput();
         }
 
-        // Validar contra el límite total del contrato.
-        if ($quantity > $contract->card_limit_amount) {
-            return back()->withErrors(['quantity' => 'Excede el límite total del contrato para este producto.'])->withInput();
+        if ($availableByProduct !== null && $quantity > $availableByProduct) {
+            return back()->withErrors(['quantity' => 'Excede el disponible por producto en este contrato.'])->withInput();
         }
 
         // Validaciones según motivo
@@ -107,21 +108,27 @@ class CardRequestController extends Controller
                 return back()->withErrors(['status' => 'Stock insuficiente para aprobar esta solicitud.']);
             }
             $contract = $cardRequest->contract;
-            if ($contract && (int) $cardRequest->quantity > $contract->card_limit_amount) {
-                return back()->withErrors(['status' => 'Excede el límite total del contrato para este producto.']);
-            }
             // Validar disponible por producto al aprobar
             $allocation = ContractAllocation::where('client_contract_id', $contract->id)
                 ->where('product_id', $product->id)
                 ->first();
+
             if ($allocation) {
                 $availableByProduct = max(0, (int) $allocation->card_limit_amount - (int) $allocation->card_current_amount - (int) $allocation->card_expired_amount);
                 if ($allocation->card_inactive_amount > 0) {
                     $availableByProduct = min($availableByProduct, (int) $allocation->card_current_amount);
                 }
-                if ((int) $cardRequest->quantity > $availableByProduct) {
-                    return back()->withErrors(['status' => 'Excede el disponible por producto en este contrato.']);
+            } elseif ($contract && $contract->product_id === $product->id) {
+                $availableByProduct = max(0, (int) $contract->card_limit_amount - (int) $contract->card_current_amount - (int) $contract->card_expired_amount);
+                if ($contract->card_inactive_amount > 0) {
+                    $availableByProduct = min($availableByProduct, (int) $contract->card_current_amount);
                 }
+            } else {
+                return back()->withErrors(['status' => 'El contrato no incluye este producto.']);
+            }
+
+            if ((int) $cardRequest->quantity > ($availableByProduct ?? 0)) {
+                return back()->withErrors(['status' => 'Excede el disponible por producto en este contrato.']);
             }
             if ($cardRequest->reason === 'new_employee') {
                 $contract = $cardRequest->contract;
@@ -153,6 +160,7 @@ class CardRequestController extends Controller
     {
         $validated = $request->validate([
             'tracking_code' => ['required', 'string', 'max:50', Rule::unique('shipments')->ignore($shipment->id)],
+            'carrier' => ['nullable', 'in:estafeta,dhl'],
             'status' => ['required', 'in:pendiente_envio,preparacion,en_ruta,entregado'],
             'eta_date' => ['nullable', 'date'],
         ]);
@@ -169,12 +177,16 @@ class CardRequestController extends Controller
     {
         $contract = $cardRequest->contract()->first();
         $product = $cardRequest->product()->first();
+        $allocation = null;
 
         if (!$contract || !$product) {
             return;
         }
 
         $qty = (int) $cardRequest->quantity;
+        $allocation = ContractAllocation::where('client_contract_id', $contract->id)
+            ->where('product_id', $product->id)
+            ->first();
 
         if ($product->stock_current < $qty) {
             // Leave request approved but do not mutate stock/contract to avoid inconsistency.
@@ -188,9 +200,18 @@ class CardRequestController extends Controller
                     $contract->card_limit_amount,
                     $contract->card_current_amount + $qty
                 );
+                if ($allocation) {
+                    $allocation->card_current_amount = min(
+                        $allocation->card_limit_amount,
+                        $allocation->card_current_amount + $qty
+                    );
+                }
                 break;
             case 'expired':
                 $contract->card_expired_amount = max(0, $contract->card_expired_amount - $qty);
+                if ($allocation) {
+                    $allocation->card_expired_amount = max(0, $allocation->card_expired_amount - $qty);
+                }
                 break;
             case 'lost':
                 // No se altera el conteo; es reposición.
@@ -201,12 +222,16 @@ class CardRequestController extends Controller
 
         $contract->save();
         $product->save();
+        if ($allocation) {
+            $allocation->save();
+        }
 
         // Generar envío si no existe.
         Shipment::firstOrCreate(
             ['card_request_id' => $cardRequest->id],
             [
                 'tracking_code' => 'TEMP-' . strtoupper(bin2hex(random_bytes(3))),
+                'carrier' => 'estafeta',
                 'status' => 'pendiente_envio',
                 'eta_date' => now()->addDays(3)->toDateString(),
             ]

@@ -7,23 +7,26 @@
     $statusMap = [
         'recibido' => 1,
         'preparacion' => 2,
+        'preparando' => 2,
         'en_ruta' => 3,
-        'entregado' => 4,
+        'pendiente' => 1,
         'pendiente_envio' => 1,
+        'entregado' => 4,
     ];
-    $currentStep = $shipment ? ($statusMap[$shipment->status] ?? 1) : 1;
+    $status = $order?->estado ?? $shipment?->status;
+    $currentStep = $status ? ($statusMap[$status] ?? 1) : 1;
 @endphp
 <div class="min-h-screen bg-slate-50 flex flex-col items-center px-6 py-12">
     <div class="w-full max-w-4xl bg-white border border-slate-200 rounded-2xl shadow-sm p-8 space-y-8">
         <header class="flex items-center justify-between">
             <div>
                 <p class="text-sm text-slate-500">ID del pedido</p>
-                <h1 class="text-2xl font-semibold text-slate-900">#{{ $shipment->tracking_code ?? $id }}</h1>
+                <h1 class="text-2xl font-semibold text-slate-900">#{{ $order->codigo_tracking ?? $shipment->tracking_code ?? $id }}</h1>
             </div>
             <div class="flex items-center gap-3">
-                @if ($shipment)
+                @if ($status)
                     <span class="px-3 py-1 rounded-full text-xs font-semibold bg-ss-emerald/10 text-ss-emerald capitalize">
-                        {{ str_replace('_', ' ', $shipment->status) }}
+                        {{ str_replace('_', ' ', $status) }}
                     </span>
                 @endif
                 <a href="/" class="text-sm text-ss-emerald font-semibold">Volver al inicio</a>
@@ -56,21 +59,29 @@
             <div class="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50 p-6">
                 <p class="text-sm text-slate-500 mb-2">Detalle</p>
                 <p class="text-lg font-semibold text-slate-900">Seguimiento de entrega</p>
-                @if ($shipment)
-                    <p class="text-sm text-slate-600 mt-3 leading-relaxed">
-                        Producto: <strong>{{ $shipment->request->product->name ?? '—' }}</strong>.
-                        Estado actual: <strong class="capitalize">{{ str_replace('_', ' ', $shipment->status) }}</strong>.
-                    </p>
-                @else
-                    <p class="text-sm text-slate-600 mt-3 leading-relaxed">
-                        No encontramos este envío; confirma tu código o vuelve a intentar más tarde.
+                <p class="text-sm text-slate-600 mt-3 leading-relaxed">
+                    Producto: <strong>{{ $order->product->name ?? $shipment->request->product->name ?? '—' }}</strong>.
+                    Estado actual: <strong class="capitalize">{{ str_replace('_', ' ', $status ?? 'pendiente') }}</strong>.
+                </p>
+                @if ($shipment && $shipment->carrier)
+                    <p class="text-sm text-slate-600 mt-1 leading-relaxed">
+                        Paquetería: <strong class="capitalize">{{ $shipment->carrier }}</strong>
                     </p>
                 @endif
+                <p class="text-sm text-slate-600 mt-2 leading-relaxed">
+                    Cantidad aprobada: <strong>{{ $order->cantidad_aprobada ?? '—' }}</strong>
+                </p>
             </div>
             <div class="rounded-xl border border-slate-200 bg-white p-6 space-y-3">
                 <p class="text-sm text-slate-500">Fecha estimada de entrega</p>
                 <p class="text-2xl font-semibold text-slate-900">
-                    {{ $shipment && $shipment->eta_date ? \Illuminate\Support\Carbon::parse($shipment->eta_date)->translatedFormat('d M') : 'Pendiente' }}
+                    @if ($order && $order->fecha_estimada)
+                        {{ \Illuminate\Support\Carbon::parse($order->fecha_estimada)->translatedFormat('d M') }}
+                    @elseif ($shipment && $shipment->eta_date)
+                        {{ \Illuminate\Support\Carbon::parse($shipment->eta_date)->translatedFormat('d M') }}
+                    @else
+                        Pendiente
+                    @endif
                 </p>
                 <p class="text-sm text-slate-600">Se actualizará cuando avance el envío.</p>
             </div>

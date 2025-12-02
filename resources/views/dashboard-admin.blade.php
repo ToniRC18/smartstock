@@ -258,7 +258,7 @@
                                 <th class="px-6 py-3">Producto</th>
                                 <th class="px-6 py-3">Estado</th>
                                 <th class="px-6 py-3">ETA</th>
-                                <th class="px-6 py-3">Acciones</th>
+                                <th class="px-6 py-3">Código / Paquetería</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -275,7 +275,14 @@
                                         <form action="{{ route('admin.shipments.update', $shipment) }}" method="POST" class="flex flex-wrap gap-2 items-center">
                                             @csrf
                                             @method('PATCH')
-                                            <input name="tracking_code" value="{{ $shipment->tracking_code }}" class="rounded-lg border border-slate-200 px-2 py-1 text-xs" />
+                                            <div class="flex flex-col gap-1">
+                                                <input name="tracking_code" value="{{ $shipment->tracking_code }}" class="rounded-lg border border-slate-200 px-2 py-1 text-xs" />
+                                                <select name="carrier" class="rounded-lg border border-slate-200 px-2 py-1 text-xs">
+                                                    <option value="">Selecciona paquetería</option>
+                                                    <option value="estafeta" @selected($shipment->carrier === 'estafeta')>Estafeta</option>
+                                                    <option value="dhl" @selected($shipment->carrier === 'dhl')>DHL</option>
+                                                </select>
+                                            </div>
                                             <select name="status" class="rounded-lg border border-slate-200 px-2 py-1 text-xs">
                                                 <option value="pendiente_envio" @selected($shipment->status === 'pendiente_envio')>Pendiente envío</option>
                                                 <option value="preparacion" @selected($shipment->status === 'preparacion')>Preparación</option>
@@ -289,7 +296,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="6" class="px-6 py-4 text-center text-slate-500">No hay envíos registrados.</td>
+                                    <td colspan="5" class="px-6 py-4 text-center text-slate-500">No hay envíos registrados.</td>
                                 </tr>
                             @endforelse
                         </tbody>
@@ -316,6 +323,7 @@
                                 <th class="px-6 py-3">Proyección</th>
                                 <th class="px-6 py-3">Mínimo</th>
                                 <th class="px-6 py-3">Estado</th>
+                                <th class="px-6 py-3">Acción</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -345,10 +353,46 @@
                                             <span class="ml-2 px-2 py-1 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700">Proy. bajo</span>
                                         @endif
                                     </td>
+                                    <td class="px-6 py-3">
+                                        <form action="{{ route('admin.products.update', $product) }}" method="POST" class="flex flex-col gap-2 md:flex-row md:items-center">
+                                            @csrf
+                                            @method('PATCH')
+                                            <input type="number" name="stock_current" value="{{ $product->stock_current }}" min="0" class="w-24 rounded-lg border border-slate-200 px-2 py-1 text-xs">
+                                            <input type="number" name="stock_minimum" value="{{ $product->stock_minimum }}" min="0" class="w-24 rounded-lg border border-slate-200 px-2 py-1 text-xs">
+                                            <button type="submit" class="px-3 py-1 rounded-lg bg-ss-emerald text-white text-xs font-semibold">Guardar</button>
+                                        </form>
+                                    </td>
                                 </tr>
                             @endforeach
                         </tbody>
                     </table>
+                </div>
+
+                <div class="border-t border-slate-100 mt-4">
+                    <div class="px-6 py-4">
+                        <p class="text-sm text-slate-500">Stock inteligente (demo)</p>
+                        <h3 class="text-lg font-semibold text-slate-900">Proyección por empresa</h3>
+                        <p class="text-xs text-slate-500 mt-1">Datos ficticios para ilustrar demanda mensual, tarjetas por vencer y reposición sugerida.</p>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm text-slate-700" id="smart-stock-table">
+                            <thead class="bg-slate-50 text-slate-500">
+                                <tr>
+                                    <th class="px-6 py-3">Empresa</th>
+                                    <th class="px-6 py-3">Demanda mensual (prom.)</th>
+                                    <th class="px-6 py-3">Vencen en 30 días</th>
+                                    <th class="px-6 py-3">Vencidas</th>
+                                    <th class="px-6 py-3">Stock sugerido</th>
+                                    <th class="px-6 py-3">Cobertura estimada</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100" id="smart-stock-body">
+                                <tr>
+                                    <td colspan="6" class="px-6 py-4 text-center text-slate-500">Calculando proyección…</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 
@@ -498,6 +542,32 @@
         const allowedViews = ['empresas', 'solicitudes', 'envios', 'inventario'];
         const storedView = localStorage.getItem('adminActiveView');
         const defaultView = allowedViews.includes(storedView) ? storedView : 'empresas';
+        const smartStockBody = document.getElementById('smart-stock-body');
+
+        const smartStockDemo = [
+            { empresa: 'Grupo Johnsons', demanda: 280, vencen: 60, vencidas: 35, stockSugerido: 320 },
+            { empresa: 'Tegna Inc', demanda: 180, vencen: 40, vencidas: 22, stockSugerido: 210 },
+            { empresa: 'ACME Corp', demanda: 140, vencen: 25, vencidas: 10, stockSugerido: 160 },
+        ];
+
+        const renderSmartStock = () => {
+            if (!smartStockBody) return;
+            smartStockBody.innerHTML = '';
+            smartStockDemo.forEach(item => {
+                const cobertura = item.stockSugerido > 0 ? (item.stockSugerido / item.demanda).toFixed(1) : '0';
+                const row = document.createElement('tr');
+                row.className = 'border-t border-slate-100';
+                row.innerHTML = `
+                    <td class="px-6 py-3 font-semibold text-slate-900">${item.empresa}</td>
+                    <td class="px-6 py-3">${item.demanda} tarjetas/mes</td>
+                    <td class="px-6 py-3 text-amber-700 font-semibold">${item.vencen}</td>
+                    <td class="px-6 py-3 text-amber-600">${item.vencidas}</td>
+                    <td class="px-6 py-3 text-ss-emerald font-semibold">${item.stockSugerido}</td>
+                    <td class="px-6 py-3 text-slate-700">~${cobertura} meses</td>
+                `;
+                smartStockBody.appendChild(row);
+            });
+        };
 
         const modal = document.getElementById('admin-request-modal');
         const modalClose = document.getElementById('admin-close-modal');
@@ -764,6 +834,7 @@
         filterStatus?.addEventListener('change', renderAllRequests);
         filterClient?.addEventListener('change', renderAllRequests);
         renderAllRequests();
+        renderSmartStock();
 
         openContractButtons.forEach(btn => {
             btn.addEventListener('click', () => {

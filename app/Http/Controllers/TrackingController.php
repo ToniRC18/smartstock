@@ -20,6 +20,7 @@ class TrackingController extends Controller
         return view('tracking', [
             'id' => $id,
             'shipment' => $shipment,
+            'order' => null,
         ]);
     }
 }

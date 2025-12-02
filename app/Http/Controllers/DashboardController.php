@@ -10,6 +10,7 @@ use App\Models\Product;
 use App\Models\CardRequest;
 use App\Models\Shipment;
 use App\Models\ContractAllocation;
+use App\Models\Order;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -50,6 +51,11 @@ class DashboardController extends Controller
             ->whereHas('request', fn ($q) => $q->where('client_id', $clientId))
             ->latest()
             ->get();
+        $orders = Order::with('product')
+            ->where('client_id', $clientId)
+            ->latest()
+            ->take(5)
+            ->get();
 
         $allocationAvailability = $contracts->mapWithKeys(function (ClientContract $contract) {
             $allocations = ContractAllocation::where('client_contract_id', $contract->id)->get()->mapWithKeys(function ($alloc) {
@@ -69,6 +75,7 @@ class DashboardController extends Controller
             'clientId' => $clientId,
             'requests' => $requests,
             'shipments' => $shipments,
+            'orders' => $orders,
             'contractAvailability' => $contracts->mapWithKeys(function (ClientContract $contract) {
                 $available = $contract->availableForNewAssignments();
                 if ($contract->card_inactive_amount > 0) {
@@ -267,5 +274,17 @@ class DashboardController extends Controller
         }
 
         return back()->with('status', 'Empresa creada con contratos base.');
+    }
+
+    public function updateProductStock(Request $request, Product $product): RedirectResponse
+    {
+        $validated = $request->validate([
+            'stock_current' => ['required', 'integer', 'min:0'],
+            'stock_minimum' => ['required', 'integer', 'min:0'],
+        ]);
+
+        $product->update($validated);
+
+        return back()->with('status', 'Inventario actualizado.');
     }
 }

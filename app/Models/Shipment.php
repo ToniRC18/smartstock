@@ -15,6 +15,7 @@ class Shipment extends Model
     protected $fillable = [
         'card_request_id',
         'tracking_code',
+        'carrier',
         'status',
         'eta_date',
     ];

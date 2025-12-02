@@ -141,6 +141,46 @@
             <div class="bg-white border border-slate-200 rounded-xl shadow-sm">
                 <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
                     <div>
+                        <p class="text-sm text-slate-500">Pedidos recientes</p>
+                        <h3 class="text-lg font-semibold text-slate-900">Tus pedidos</h3>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm text-slate-700">
+                        <thead class="bg-slate-50 text-slate-500">
+                            <tr>
+                                <th class="px-6 py-3">Tracking</th>
+                                <th class="px-6 py-3">Producto</th>
+                                <th class="px-6 py-3">Estado</th>
+                                <th class="px-6 py-3">Fecha estimada</th>
+                                <th class="px-6 py-3">Motivo rechazo</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse ($orders ?? [] as $order)
+                                <tr class="border-t border-slate-100">
+                                    <td class="px-6 py-3 font-semibold text-slate-900">
+                                        <a class="text-ss-emerald" href="/tracking/{{ $order->codigo_tracking }}">#{{ $order->codigo_tracking }}</a>
+                                    </td>
+                                    <td class="px-6 py-3">{{ $order->product->name ?? 'Producto' }}</td>
+                                    <td class="px-6 py-3 capitalize">
+                                        <span class="px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">{{ str_replace('_', ' ', $order->estado) }}</span>
+                                    </td>
+                                    <td class="px-6 py-3 text-slate-600">{{ $order->fecha_estimada ?? 'Pendiente' }}</td>
+                                    <td class="px-6 py-3 text-xs text-amber-600">{{ $order->motivo_rechazo ?? '—' }}</td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="5" class="px-6 py-4 text-center text-slate-500">Aún no hay pedidos.</td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="bg-white border border-slate-200 rounded-xl shadow-sm">
+                <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+                    <div>
                         <p class="text-sm text-slate-500">Solicitudes recientes</p>
                         <h3 class="text-lg font-semibold text-slate-900">Historial</h3>
                     </div>
@@ -213,6 +253,7 @@
                         <thead class="bg-slate-50 text-slate-500">
                             <tr>
                                 <th class="px-6 py-3">Tracking</th>
+                                <th class="px-6 py-3">Paquetería</th>
                                 <th class="px-6 py-3">Producto</th>
                                 <th class="px-6 py-3">Estado</th>
                                 <th class="px-6 py-3">ETA</th>
@@ -224,6 +265,7 @@
                                     <td class="px-6 py-3 font-semibold text-slate-900">
                                         <a class="text-ss-emerald" href="/tracking/{{ $shipment->tracking_code }}">#{{ $shipment->tracking_code }}</a>
                                     </td>
+                                    <td class="px-6 py-3 capitalize">{{ $shipment->carrier ?? '—' }}</td>
                                     <td class="px-6 py-3">{{ $shipment->request->product->name ?? 'Producto' }}</td>
                                     <td class="px-6 py-3 capitalize">
                                         <span class="px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">{{ str_replace('_', ' ', $shipment->status) }}</span>
@@ -232,7 +274,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="4" class="px-6 py-4 text-center text-slate-500">Aún no hay envíos.</td>
+                                    <td colspan="5" class="px-6 py-4 text-center text-slate-500">Aún no hay envíos.</td>
                                 </tr>
                             @endforelse
                         </tbody>
