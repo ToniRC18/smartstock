@@ -15,3 +15,4 @@ Route::get('/tracking/{id}', [TrackingController::class, 'show']);
 Route::post('/dashboard/requests', [CardRequestController::class, 'store'])->name('dashboard.requests.store');
 Route::patch('/admin/requests/{cardRequest}/status', [CardRequestController::class, 'updateStatus'])->name('admin.requests.update');
 Route::patch('/admin/shipments/{shipment}', [CardRequestController::class, 'updateShipment'])->name('admin.shipments.update');
+Route::post('/admin/clients', [DashboardController::class, 'storeClient'])->name('admin.clients.store');

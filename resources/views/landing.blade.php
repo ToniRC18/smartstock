@@ -4,7 +4,7 @@
 @section('content')
 <div class="flex flex-col min-h-screen bg-gradient-to-b from-white via-emerald-50/20 to-slate-50">
     <header class="px-8 md:px-12 py-6 flex items-center justify-between border-b border-slate-200">
-        <div class="flex items-center gap-3">
+        <a href="/" class="flex items-center gap-3">
             <div class="h-10 w-10 rounded-xl bg-ss-emerald/20 border border-ss-emerald flex items-center justify-center text-ss-emerald font-semibold">
                 SS
             </div>
@@ -12,7 +12,7 @@
                 <p class="text-xl font-semibold text-slate-900">SmartStock</p>
                 <p class="text-sm text-slate-500">Control ágil de tarjetas</p>
             </div>
-        </div>
+        </a>
         <nav class="flex items-center gap-3 text-sm font-medium text-slate-700">
             <a href="/dashboard" class="px-3 py-2 rounded-lg hover:text-ss-emerald hover:bg-ss-emerald/10 transition-colors">Dashboard empresas</a>
             <a href="/admin/dashboard" class="px-3 py-2 rounded-lg hover:text-ss-emerald hover:bg-ss-emerald/10 transition-colors">Dashboard admin</a>
@@ -43,33 +43,38 @@
             <div class="flex-1">
                 <div class="relative w-full max-w-lg mx-auto">
                     <div class="absolute inset-0 rounded-3xl bg-ss-emerald/20 blur-3xl"></div>
-                    <div class="relative bg-white border border-slate-200 rounded-3xl shadow-xl shadow-slate-200/80 p-8 space-y-6">
+                    <div class="relative bg-white border border-slate-200 rounded-3xl shadow-xl shadow-slate-200/80 p-8 space-y-5">
                         <div class="flex items-center justify-between">
-                            <p class="text-lg font-semibold text-slate-900">Panel ágil</p>
-                            <span class="px-3 py-1 text-xs font-semibold bg-ss-emerald/15 text-ss-emerald rounded-full">En vivo</span>
+                            <p class="text-lg font-semibold text-slate-900">Playbook operativo</p>
+                            <span class="px-3 py-1 text-xs font-semibold bg-ss-emerald/15 text-ss-emerald rounded-full">Reglas activas</span>
                         </div>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div class="rounded-2xl border border-slate-200 p-4 bg-slate-50">
-                                <p class="text-sm text-slate-500">Validaciones</p>
-                                <p class="text-2xl font-semibold text-slate-900">+18%</p>
+                        <div class="space-y-4">
+                            <div class="flex items-start gap-3 rounded-2xl border border-slate-200 p-4 bg-slate-50">
+                                <div class="h-10 w-10 rounded-lg bg-ss-emerald/15 text-ss-emerald flex items-center justify-center font-semibold">1</div>
+                                <div>
+                                    <p class="text-sm font-semibold text-slate-900">Valida contra contrato</p>
+                                    <p class="text-sm text-slate-600">Límite por producto, inactivas y stock mínimo aplicados antes de aprobar.</p>
+                                </div>
                             </div>
-                            <div class="rounded-2xl border border-slate-200 p-4 bg-white">
-                                <p class="text-sm text-slate-500">Stock</p>
-                                <p class="text-2xl font-semibold text-ss-emerald">Al día</p>
+                            <div class="flex items-start gap-3 rounded-2xl border border-slate-200 p-4 bg-white">
+                                <div class="h-10 w-10 rounded-lg bg-ss-emerald/15 text-ss-emerald flex items-center justify-center font-semibold">2</div>
+                                <div>
+                                    <p class="text-sm font-semibold text-slate-900">Stock con alertas</p>
+                                    <p class="text-sm text-slate-600">Visualiza críticos y evita aprobar si dejas el almacén en rojo.</p>
+                                </div>
                             </div>
-                            <div class="rounded-2xl border border-slate-200 p-4 bg-white">
-                                <p class="text-sm text-slate-500">Pedidos</p>
-                                <p class="text-2xl font-semibold text-slate-900">124</p>
-                            </div>
-                            <div class="rounded-2xl border border-slate-200 p-4 bg-slate-50">
-                                <p class="text-sm text-slate-500">Alertas</p>
-                                <p class="text-2xl font-semibold text-amber-500">Bajas</p>
+                            <div class="flex items-start gap-3 rounded-2xl border border-slate-200 p-4 bg-slate-50">
+                                <div class="h-10 w-10 rounded-lg bg-ss-emerald/15 text-ss-emerald flex items-center justify-center font-semibold">3</div>
+                                <div>
+                                    <p class="text-sm font-semibold text-slate-900">Tracking inmediato</p>
+                                    <p class="text-sm text-slate-600">Genera guías y seguimiento al aprobar solicitudes, listo para demo.</p>
+                                </div>
                             </div>
                         </div>
-                        <div class="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
-                            <div class="h-full w-3/4 bg-gradient-to-r from-ss-emerald to-ss-emerald-light"></div>
+                        <div class="rounded-2xl border border-slate-200 bg-gradient-to-r from-ss-emerald/10 to-ss-emerald/5 p-4">
+                            <p class="text-xs uppercase tracking-wide text-ss-emerald font-semibold">Lista para conectar tus datos reales</p>
+                            <p class="text-sm text-slate-600 mt-1">Prototipo con reglas de negocio, validaciones y vistas espejo para cliente y admin.</p>
                         </div>
-                        <p class="text-sm text-slate-500">Listo para conectar tus datos reales.</p>
                     </div>
                 </div>
             </div>

@@ -5,7 +5,7 @@
 <div class="min-h-screen flex bg-slate-100">
     <aside class="w-64 bg-ss-dark text-white flex flex-col border-r border-slate-800">
         <div class="px-6 py-6 border-b border-slate-800">
-            <p class="text-lg font-semibold">SmartStock</p>
+            <a href="/" class="text-lg font-semibold">SmartStock</a>
             <p class="text-sm text-slate-300">Panel empresa</p>
         </div>
         <nav class="flex-1 px-4 py-6 space-y-3 text-sm">
@@ -19,6 +19,12 @@
     </aside>
 
     <main class="flex-1 p-8 space-y-8">
+        @if (session('status'))
+            <div id="flash-success" class="rounded-lg border border-ss-emerald/30 bg-ss-emerald/10 text-ss-emerald px-4 py-3 text-sm shadow-sm">
+                {{ session('status') }}
+            </div>
+        @endif
+
         <header class="flex items-center justify-between">
             <div>
                 <p class="text-sm text-slate-500">Visión general</p>
@@ -26,6 +32,14 @@
             </div>
             <div class="flex items-center gap-3">
                 <div class="text-xs text-slate-500">Cliente #{{ $clientId ?? '-' }}</div>
+                <form method="GET" action="/dashboard" class="flex items-center gap-2">
+                    <select name="client_id" class="rounded-lg border border-slate-200 px-3 py-2 text-sm" onchange="this.form.submit()">
+                        @foreach ($allClients ?? [] as $clientOption)
+                            <option value="{{ $clientOption->id }}" @selected($clientOption->id == $clientId)>#{{ $clientOption->id }} · {{ $clientOption->name }}</option>
+                        @endforeach
+                    </select>
+                    <span class="text-xs text-slate-400">Prueba con otro cliente</span>
+                </form>
             </div>
         </header>
 
@@ -65,7 +79,7 @@
                         <summary class="flex items-center justify-between px-6 py-4 cursor-pointer">
                             <div>
                                 <p class="text-sm text-slate-500">Contrato #{{ $contract->id }}</p>
-                                <h3 class="text-lg font-semibold text-slate-900">{{ $contract->product->name ?? 'Contrato' }}</h3>
+                                <h3 class="text-lg font-semibold text-slate-900">{{ $contract->name ?? 'Contrato' }} · Productos: {{ $contract->allocations->count() }}</h3>
                             </div>
                             <div class="flex items-center gap-6 text-sm">
                                 <span class="text-slate-600">Límite: <strong>{{ $contract->card_limit_amount }}</strong></span>
@@ -249,22 +263,28 @@
             @endif
             <div>
                 <label class="text-sm text-slate-600">Contrato</label>
-                <select name="contract_id" class="w-full mt-1 rounded-lg border border-slate-200 px-3 py-2 text-sm" required>
+                <select name="contract_id" id="contract_id" class="w-full mt-1 rounded-lg border border-slate-200 px-3 py-2 text-sm" required>
                     <option value="">Selecciona contrato</option>
                     @foreach ($contracts as $contract)
-                        <option value="{{ $contract->id }}">Contrato #{{ $contract->id }} - {{ $contract->product->name ?? 'Contrato' }}</option>
+                        @php
+                            $availableForNew = $contractAvailability[$contract->id] ?? 0;
+                        @endphp
+                        <option value="{{ $contract->id }}" data-available="{{ $availableForNew }}">
+                            Contrato #{{ $contract->id }} - {{ $contract->product->name ?? 'Contrato' }} (Disp: {{ $availableForNew }})
+                        </option>
                     @endforeach
                 </select>
+                <p id="available-hint" class="text-xs text-slate-500 mt-1">Disponible para solicitar: —</p>
             </div>
-            <div>
-                <label class="text-sm text-slate-600">Producto</label>
-                <select name="product_id" class="w-full mt-1 rounded-lg border border-slate-200 px-3 py-2 text-sm" required>
-                    <option value="">Selecciona</option>
-                    @foreach ($products as $product)
-                        <option value="{{ $product->id }}">{{ $product->name }}</option>
-                    @endforeach
-                </select>
-            </div>
+                    <div>
+                        <label class="text-sm text-slate-600">Producto</label>
+                        <select name="product_id" class="w-full mt-1 rounded-lg border border-slate-200 px-3 py-2 text-sm" required>
+                            <option value="">Selecciona</option>
+                            @foreach ($products->whereIn('name', ['Combustible', 'Despensa', 'Premios']) as $product)
+                                <option value="{{ $product->id }}">{{ $product->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                     <label class="text-sm text-slate-600">Motivo</label>
@@ -277,7 +297,8 @@
                 </div>
                 <div>
                     <label class="text-sm text-slate-600">Cantidad</label>
-                    <input type="number" name="quantity" min="1" class="w-full mt-1 rounded-lg border border-slate-200 px-3 py-2 text-sm" required>
+                    <input type="number" name="quantity" id="quantity" min="1" class="w-full mt-1 rounded-lg border border-slate-200 px-3 py-2 text-sm" required>
+                    <p id="quantity-warning" class="text-xs text-amber-600 mt-1 hidden">No se pueden pedir más de lo disponible en el contrato.</p>
                 </div>
             </div>
             <div>
@@ -301,24 +322,39 @@
     (function () {
         const navButtons = document.querySelectorAll('button[data-view]');
         const sections = document.querySelectorAll('[data-section]');
+        const defaultView = localStorage.getItem('clientActiveView') || 'overview';
+        const flash = document.getElementById('flash-success');
+        const allocationAvailability = @json($allocationAvailability ?? []);
+
+        function activateView(view) {
+            navButtons.forEach(b => {
+                const isActive = b.getAttribute('data-view') === view;
+                b.classList.toggle('bg-white/10', isActive);
+                b.classList.toggle('text-white', isActive);
+                b.classList.toggle('text-slate-300', !isActive);
+            });
+            sections.forEach(sec => {
+                if (sec.getAttribute('data-section') === view) {
+                    sec.classList.remove('hidden');
+                } else {
+                    sec.classList.add('hidden');
+                }
+            });
+            localStorage.setItem('clientActiveView', view);
+        }
 
         navButtons.forEach(btn => {
             btn.addEventListener('click', () => {
                 const view = btn.getAttribute('data-view');
-                navButtons.forEach(b => b.classList.remove('bg-white/10', 'text-white'));
-                navButtons.forEach(b => b.classList.add('text-slate-300'));
-                btn.classList.add('bg-white/10', 'text-white');
-                btn.classList.remove('text-slate-300');
-
-                sections.forEach(sec => {
-                    if (sec.getAttribute('data-section') === view) {
-                        sec.classList.remove('hidden');
-                    } else {
-                        sec.classList.add('hidden');
-                    }
-                });
+                activateView(view);
             });
         });
+
+        activateView(defaultView);
+
+        if (flash) {
+            setTimeout(() => flash.classList.add('hidden'), 1000);
+        }
 
         const modal = document.getElementById('request-modal');
         const openModalBtn = document.getElementById('open-request-modal');
@@ -331,6 +367,41 @@
         openModalBtn?.addEventListener('click', openModal);
         closeModalBtn?.addEventListener('click', closeModal);
         cancelBtn?.addEventListener('click', closeModal);
+
+        // Mostrar disponibilidad y limitar cantidad según contrato
+        const contractSelect = document.getElementById('contract_id');
+        const quantityInput = document.getElementById('quantity');
+        const hint = document.getElementById('available-hint');
+        const quantityWarning = document.getElementById('quantity-warning');
+        const productSelect = document.querySelector('select[name="product_id"]');
+
+        const updateAvailable = () => {
+            const selectedContract = contractSelect?.selectedOptions?.[0];
+            const selectedProduct = productSelect?.value;
+            let available = selectedContract ? Number(selectedContract.dataset.available || 0) : 0;
+
+            // Priorizar disponibilidad por producto si existe
+            if (selectedContract && selectedProduct && allocationAvailability[selectedContract.value] && allocationAvailability[selectedContract.value][selectedProduct] !== undefined) {
+                available = Number(allocationAvailability[selectedContract.value][selectedProduct] || 0);
+            }
+
+            hint.textContent = `Disponible para solicitar: ${available || 0}`;
+            if (quantityInput) {
+                quantityInput.max = available > 0 ? available : '';
+                const current = Number(quantityInput.value || 0);
+                const over = available > 0 && current > available;
+                quantityWarning?.classList.toggle('hidden', !over);
+                if (over) {
+                    quantityInput.classList.add('border-amber-400', 'bg-amber-50');
+                } else {
+                    quantityInput.classList.remove('border-amber-400', 'bg-amber-50');
+                }
+            }
+        };
+        contractSelect?.addEventListener('change', updateAvailable);
+        productSelect?.addEventListener('change', updateAvailable);
+        quantityInput?.addEventListener('input', updateAvailable);
+        updateAvailable();
     })();
 </script>
 @endsection

@@ -8,6 +8,7 @@ use App\Models\CardRequest;
 use App\Models\ClientContract;
 use App\Models\Product;
 use App\Models\Shipment;
+use App\Models\ContractAllocation;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -40,14 +41,45 @@ class CardRequestController extends Controller
         $quantity = (int) $validated['quantity'];
         $reason = $validated['reason'];
 
-        // Regla de oro: si hay inactivas, solo se surte hasta la cantidad en uso.
-        $availableByLimit = $contract->availableForNewAssignments();
-        if ($contract->card_inactive_amount > 0) {
-            $availableByLimit = min($availableByLimit, (int) $contract->card_current_amount);
+        // Disponibilidad por producto (allocation)
+        $allocation = ContractAllocation::where('client_contract_id', $contract->id)
+            ->where('product_id', $product->id)
+            ->first();
+
+        $availableByProduct = null;
+        if ($allocation) {
+            $availableByProduct = max(0, (int) $allocation->card_limit_amount - (int) $allocation->card_current_amount - (int) $allocation->card_expired_amount);
+            if ($allocation->card_inactive_amount > 0) {
+                $availableByProduct = min($availableByProduct, (int) $allocation->card_current_amount);
+            }
+            if ($quantity > $availableByProduct) {
+                return back()->withErrors(['quantity' => 'Excede el disponible por producto en este contrato.'])->withInput();
+            }
         }
 
-        if ($reason !== 'expired' && $quantity > $availableByLimit) {
-            return back()->withErrors(['quantity' => 'Cantidad solicitada excede el disponible del contrato (considerando inactivas).'])->withInput();
+        // Validar contra el límite total del contrato.
+        if ($quantity > $contract->card_limit_amount) {
+            return back()->withErrors(['quantity' => 'Excede el límite total del contrato para este producto.'])->withInput();
+        }
+
+        // Validaciones según motivo
+        if ($reason === 'new_employee') {
+            $availableByLimit = $contract->availableForNewAssignments();
+            if ($contract->card_inactive_amount > 0) {
+                $availableByLimit = min($availableByLimit, (int) $contract->card_current_amount);
+            }
+            if ($quantity > $availableByLimit) {
+                return back()->withErrors(['quantity' => 'Excede el disponible para nuevas asignaciones (considerando tarjetas inactivas).'])->withInput();
+            }
+        } elseif ($reason === 'expired') {
+            // Reposición, no limita por disponible
+        } elseif ($reason === 'lost') {
+            // Reposición por pérdida: no aplica validación de disponible, pero respeta stock.
+        } else {
+            $availableByLimit = $contract->availableForNewAssignments();
+            if ($quantity > $availableByLimit) {
+                return back()->withErrors(['quantity' => 'Cantidad solicitada excede el disponible del contrato.'])->withInput();
+            }
         }
 
         if ($product->stock_current < $quantity) {
@@ -73,6 +105,35 @@ class CardRequestController extends Controller
             $product = $cardRequest->product;
             if ($product && $product->stock_current < (int) $cardRequest->quantity) {
                 return back()->withErrors(['status' => 'Stock insuficiente para aprobar esta solicitud.']);
+            }
+            $contract = $cardRequest->contract;
+            if ($contract && (int) $cardRequest->quantity > $contract->card_limit_amount) {
+                return back()->withErrors(['status' => 'Excede el límite total del contrato para este producto.']);
+            }
+            // Validar disponible por producto al aprobar
+            $allocation = ContractAllocation::where('client_contract_id', $contract->id)
+                ->where('product_id', $product->id)
+                ->first();
+            if ($allocation) {
+                $availableByProduct = max(0, (int) $allocation->card_limit_amount - (int) $allocation->card_current_amount - (int) $allocation->card_expired_amount);
+                if ($allocation->card_inactive_amount > 0) {
+                    $availableByProduct = min($availableByProduct, (int) $allocation->card_current_amount);
+                }
+                if ((int) $cardRequest->quantity > $availableByProduct) {
+                    return back()->withErrors(['status' => 'Excede el disponible por producto en este contrato.']);
+                }
+            }
+            if ($cardRequest->reason === 'new_employee') {
+                $contract = $cardRequest->contract;
+                if ($contract) {
+                    $available = $contract->availableForNewAssignments();
+                    if ($contract->card_inactive_amount > 0) {
+                        $available = min($available, (int) $contract->card_current_amount);
+                    }
+                    if ((int) $cardRequest->quantity > $available) {
+                        return back()->withErrors(['status' => 'No es aplicable: excede el disponible para nuevas asignaciones.']);
+                    }
+                }
             }
         }
 

@@ -15,6 +15,7 @@ class ClientContract extends Model
 
     protected $fillable = [
         'id',
+        'name',
         'client_id',
         'product_id',
         'card_limit_amount',

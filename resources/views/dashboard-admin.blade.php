@@ -16,11 +16,29 @@
             ],
             'contracts' => $client->contracts->map(function ($contract) {
                 return [
+                    'id' => $contract->id,
                     'product' => optional($contract->product)->name ?? 'Producto',
                     'limit' => $contract->card_limit_amount,
                     'current' => $contract->card_current_amount,
                     'inactive' => $contract->card_inactive_amount,
+                    'expired' => $contract->card_expired_amount,
                     'available' => $contract->availableByLimit(),
+                    'available_new' => (function () use ($contract) {
+                        $available = $contract->availableForNewAssignments();
+                        if ($contract->card_inactive_amount > 0) {
+                            $available = min($available, (int) $contract->card_current_amount);
+                        }
+                        return $available;
+                    })(),
+                    'allocations' => $contract->allocations->map(function ($alloc) {
+                        return [
+                            'product' => optional($alloc->product)->name ?? 'Producto',
+                            'limit' => $alloc->card_limit_amount,
+                            'current' => $alloc->card_current_amount,
+                            'inactive' => $alloc->card_inactive_amount,
+                            'expired' => $alloc->card_expired_amount,
+                        ];
+                    })->values(),
                 ];
             })->values(),
         ];
@@ -29,15 +47,32 @@
 <div class="min-h-screen flex bg-slate-100">
     <aside class="w-64 bg-ss-dark text-white flex flex-col border-r border-slate-800">
         <div class="px-6 py-6 border-b border-slate-800">
-            <p class="text-lg font-semibold">SmartStock</p>
+            <a href="/" class="text-lg font-semibold text-white">SmartStock</a>
             <p class="text-sm text-slate-300">Panel admin</p>
         </div>
+        @php
+            $allRequestsCollection = collect($requestsByClient ?? [])->flatten(1);
+            $pendingRequestsCount = $allRequestsCollection->where('status', 'pending')->count();
+            $shipmentsCount = ($shipments ?? collect())->count();
+            $criticalCount = ($products ?? collect())->filter->isStockCritical()->count();
+        @endphp
         <nav class="flex-1 px-4 py-6 space-y-3 text-sm">
-            <button data-view="empresas" class="w-full text-left px-3 py-2 rounded-lg bg-white/10 text-white font-medium">Empresas</button>
-            <button data-view="solicitudes" class="w-full text-left px-3 py-2 rounded-lg text-slate-300 hover:bg-white/5">Solicitudes</button>
-            <button data-view="envios" class="w-full text-left px-3 py-2 rounded-lg text-slate-300 hover:bg-white/5">Envíos</button>
-            <span class="block px-3 py-2 rounded-lg text-slate-400">Alertas</span>
-            <span class="block px-3 py-2 rounded-lg text-slate-400">Stock</span>
+            <button data-view="empresas" class="w-full text-left px-3 py-2 rounded-lg bg-white/10 text-white font-medium flex items-center justify-between">
+                <span>Empresas</span>
+                <span class="text-xs px-2 py-1 rounded-full bg-white/15 text-white">{{ $clientData->count() }}</span>
+            </button>
+            <button data-view="solicitudes" class="w-full text-left px-3 py-2 rounded-lg text-slate-300 hover:bg-white/5 flex items-center justify-between">
+                <span>Solicitudes</span>
+                <span class="text-xs px-2 py-1 rounded-full bg-white/10 text-white">{{ $pendingRequestsCount }}</span>
+            </button>
+            <button data-view="envios" class="w-full text-left px-3 py-2 rounded-lg text-slate-300 hover:bg-white/5 flex items-center justify-between">
+                <span>Envíos</span>
+                <span class="text-xs px-2 py-1 rounded-full bg-white/10 text-white">{{ $shipmentsCount }}</span>
+            </button>
+            <button data-view="inventario" class="w-full text-left px-3 py-2 rounded-lg text-slate-300 hover:bg-white/5 flex items-center justify-between">
+                <span>Inventario</span>
+                <span class="text-xs px-2 py-1 rounded-full bg-white/10 text-white">{{ $criticalCount }}</span>
+            </button>
         </nav>
         <div class="px-4 py-4 border-t border-slate-800 text-xs text-slate-400">
             Supervisión central
@@ -45,14 +80,45 @@
     </aside>
 
     <main class="flex-1 p-8 space-y-8">
-        <header class="flex items-center justify-between">
-            <div>
-                <p class="text-sm text-slate-500">Empresas en contrato</p>
-                <h1 class="text-2xl font-semibold text-slate-900">Dashboard Admin</h1>
+        @if (session('status'))
+            <div id="flash-success" class="rounded-lg border border-ss-emerald/30 bg-ss-emerald/10 text-ss-emerald px-4 py-3 text-sm shadow-sm">
+                {{ session('status') }}
             </div>
-            <span class="px-4 py-2 rounded-lg bg-ss-emerald/10 text-ss-emerald text-sm font-semibold">
-                {{ $clientData->count() }} empresas
-            </span>
+        @endif
+
+        <header class="flex flex-col gap-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-slate-500">Empresas en contrato</p>
+                    <h1 class="text-2xl font-semibold text-slate-900">Dashboard Admin</h1>
+                </div>
+                <span class="px-4 py-2 rounded-lg bg-ss-emerald/10 text-ss-emerald text-sm font-semibold">
+                    {{ $clientData->count() }} empresas
+                </span>
+            </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div class="rounded-xl border border-slate-200 bg-white p-4 flex items-center justify-between">
+                        <div>
+                            <p class="text-xs text-slate-500">Solicitudes pendientes</p>
+                            <p class="text-2xl font-semibold text-slate-900">{{ $pendingRequestsCount }}</p>
+                    </div>
+                    <span class="px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">Revisar</span>
+                </div>
+                <div class="rounded-xl border border-slate-200 bg-white p-4 flex items-center justify-between">
+                    <div>
+                        <p class="text-xs text-slate-500">Envíos activos</p>
+                        <p class="text-2xl font-semibold text-slate-900">{{ $shipmentsCount }}</p>
+                    </div>
+                    <span class="px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">Seguimiento</span>
+                </div>
+                <div class="rounded-xl border border-slate-200 bg-white p-4 flex items-center justify-between">
+                    <div>
+                        <p class="text-xs text-slate-500">Stock crítico</p>
+                        <p class="text-2xl font-semibold text-slate-900">{{ $criticalCount }}</p>
+                    </div>
+                    <span class="px-3 py-1 rounded-full text-xs font-semibold bg-ss-emerald/10 text-ss-emerald">Inventario</span>
+                </div>
+            </div>
         </header>
 
         <section data-section="empresas">
@@ -61,13 +127,14 @@
                     Aún no hay clientes cargados. Ejecuta los seeders o agrega contratos para ver la lista.
                 </div>
             @else
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <section class="lg:col-span-1 bg-white border border-slate-200 rounded-xl shadow-sm p-6">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6" id="client-panels">
+                    <section id="client-list" class="col-span-3 lg:col-span-3 bg-white border border-slate-200 rounded-xl shadow-sm p-6 max-w-5xl w-full mx-auto">
                         <div class="flex items-center justify-between mb-4">
                             <div>
                                 <p class="text-sm text-slate-500">Empresas</p>
                                 <h2 class="text-lg font-semibold text-slate-900">Selecciona para ver detalles</h2>
                             </div>
+                            <button id="open-client-modal" class="px-4 py-2 rounded-lg bg-ss-emerald text-white text-sm font-semibold shadow-sm">Agregar empresa</button>
                         </div>
                         <div class="space-y-3">
                             @foreach ($clientData as $client)
@@ -91,12 +158,15 @@
                         </div>
                     </section>
 
-                    <section class="lg:col-span-2 space-y-6">
+                    <section id="client-detail" class="lg:col-span-2 space-y-6 hidden">
                         <div class="bg-white border border-slate-200 rounded-xl shadow-sm">
                             <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
-                                <div>
-                                    <p class="text-sm text-slate-500">Detalle de cliente</p>
-                                    <h2 id="detail-name" class="text-lg font-semibold text-slate-900">Seleccione una empresa</h2>
+                                <div class="flex items-center gap-3">
+                                    <button id="back-to-list" class="px-3 py-2 rounded-lg border border-slate-200 text-slate-700 text-xs">← Regresar</button>
+                                    <div>
+                                        <p class="text-sm text-slate-500">Detalle de cliente</p>
+                                        <h2 id="detail-name" class="text-lg font-semibold text-slate-900">Seleccione una empresa</h2>
+                                    </div>
                                 </div>
                                 <span id="detail-contract-count" class="text-xs font-semibold text-slate-600 bg-slate-100 px-3 py-1 rounded-full">- contratos</span>
                             </div>
@@ -120,30 +190,16 @@
                             </div>
                         </div>
 
-                        <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                        <div class="bg-white border border-slate-200 rounded-xl shadow-sm">
                             <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
                                 <div>
                                     <p class="text-sm text-slate-500">Contratos del cliente</p>
-                                    <h3 class="text-lg font-semibold text-slate-900">Productos y uso</h3>
+                                    <h3 class="text-lg font-semibold text-slate-900">Detalle por contrato y producto</h3>
                                 </div>
+                                <button class="text-sm text-ss-emerald font-semibold" data-open-contract-modal data-client-id="">+ Nuevo contrato</button>
                             </div>
-                            <div class="overflow-x-auto">
-                                <table class="w-full text-left text-sm text-slate-700">
-                                    <thead class="bg-slate-50 text-slate-500">
-                                        <tr>
-                                            <th class="px-6 py-3">Producto</th>
-                                            <th class="px-6 py-3">Límite</th>
-                                            <th class="px-6 py-3">En uso</th>
-                                            <th class="px-6 py-3">Inactivas</th>
-                                            <th class="px-6 py-3">Disponible</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="contracts-body">
-                                        <tr>
-                                            <td colspan="5" class="px-6 py-4 text-center text-slate-500">Selecciona una empresa para ver sus contratos.</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
+                            <div id="contracts-accordion" class="divide-y divide-slate-100">
+                                <div class="px-6 py-4 text-center text-slate-500">Selecciona una empresa para ver sus contratos.</div>
                             </div>
                         </div>
                     </section>
@@ -153,53 +209,34 @@
 
         <section data-section="solicitudes" class="hidden space-y-6">
             <div class="bg-white border border-slate-200 rounded-xl shadow-sm">
-                <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+                <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 flex-wrap gap-3">
                     <div>
                         <p class="text-sm text-slate-500">Solicitudes</p>
-                        <h3 class="text-lg font-semibold text-slate-900">Aprobar o rechazar</h3>
+                        <h3 class="text-lg font-semibold text-slate-900">Todas las empresas</h3>
+                    </div>
+                    <div class="flex items-center gap-3 text-sm">
+                        <div>
+                            <label class="text-xs text-slate-500">Estado</label>
+                            <select id="filter-status" class="ml-2 rounded-lg border border-slate-200 px-2 py-1 text-xs">
+                                <option value="all">Todos</option>
+                                <option value="pending">Pendiente</option>
+                                <option value="approved">Aprobada</option>
+                                <option value="rejected">Rechazada</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-xs text-slate-500">Empresa</label>
+                            <select id="filter-client" class="ml-2 rounded-lg border border-slate-200 px-2 py-1 text-xs">
+                                <option value="all">Todas</option>
+                                @foreach ($clientData as $client)
+                                    <option value="{{ $client['id'] }}">{{ $client['name'] }}</option>
+                                @endforeach
+                            </select>
+                        </div>
                     </div>
                 </div>
-                <div class="divide-y divide-slate-100" id="requests-container">
-                    <div class="px-6 py-4 text-center text-slate-500">Selecciona una empresa para ver solicitudes.</div>
-                </div>
-            </div>
-
-            <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-                <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
-                    <div>
-                        <p class="text-sm text-slate-500">Inventario</p>
-                        <h3 class="text-lg font-semibold text-slate-900">Stock por producto</h3>
-                    </div>
-                </div>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left text-sm text-slate-700">
-                        <thead class="bg-slate-50 text-slate-500">
-                            <tr>
-                                <th class="px-6 py-3">Producto</th>
-                                <th class="px-6 py-3">Stock actual</th>
-                                <th class="px-6 py-3">Mínimo</th>
-                                <th class="px-6 py-3">Estado</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (($products ?? []) as $product)
-                                @php
-                                    $isCritical = $product->isStockCritical();
-                                @endphp
-                                <tr class="border-t border-slate-100">
-                                    <td class="px-6 py-3 font-semibold text-slate-900">{{ $product->name }}</td>
-                                    <td class="px-6 py-3">{{ $product->stock_current }}</td>
-                                    <td class="px-6 py-3">{{ $product->stock_minimum }}</td>
-                                    <td class="px-6 py-3">
-                                        <span class="px-3 py-1 rounded-full text-xs font-semibold
-                                            {{ $isCritical ? 'bg-amber-100 text-amber-700' : 'bg-ss-emerald/15 text-ss-emerald' }}">
-                                            {{ $isCritical ? 'Crítico' : 'Sano' }}
-                                        </span>
-                                    </td>
-                                </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
+                <div id="all-requests-container" class="divide-y divide-slate-100">
+                    <div class="px-6 py-4 text-center text-slate-500">No hay solicitudes registradas.</div>
                 </div>
             </div>
         </section>
@@ -260,6 +297,63 @@
                 </div>
             </div>
         </section>
+
+        <section data-section="inventario" class="hidden space-y-6">
+            <div class="bg-white border border-slate-200 rounded-xl shadow-sm">
+                <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+                    <div>
+                        <p class="text-sm text-slate-500">Inventario OneCard</p>
+                        <h3 class="text-lg font-semibold text-slate-900">Stock disponible</h3>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm text-slate-700">
+                        <thead class="bg-slate-50 text-slate-500">
+                            <tr>
+                                <th class="px-6 py-3">Producto</th>
+                                <th class="px-6 py-3">Stock actual</th>
+                                <th class="px-6 py-3">Pendiente (sol.)</th>
+                                <th class="px-6 py-3">Proyección</th>
+                                <th class="px-6 py-3">Mínimo</th>
+                                <th class="px-6 py-3">Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (($products ?? []) as $product)
+                                @php
+                                    $isCritical = $product->isStockCritical();
+                                    $pending = ($pendingByProduct[$product->id] ?? 0);
+                                    $projected = $product->stock_current - $pending;
+                                    $projectedCritical = $projected <= $product->stock_minimum;
+                                @endphp
+                                <tr class="border-t border-slate-100">
+                                    <td class="px-6 py-3 font-semibold text-slate-900">{{ $product->name }}</td>
+                                    <td class="px-6 py-3">{{ $product->stock_current }}</td>
+                                    <td class="px-6 py-3 text-amber-600 font-semibold">{{ $pending }}</td>
+                                    <td class="px-6 py-3 {{ $projectedCritical ? 'text-amber-700 font-semibold' : 'text-slate-700' }}">
+                                        {{ $projected }}
+                                    </td>
+                                    <td class="px-6 py-3">{{ $product->stock_minimum }}</td>
+                                    <td class="px-6 py-3">
+                                        <span class="px-3 py-1 rounded-full text-xs font-semibold {{ $isCritical ? 'bg-amber-100 text-amber-700' : 'bg-ss-emerald/15 text-ss-emerald' }}">
+                                            {{ $isCritical ? 'Crítico' : 'Sano' }}
+                                        </span>
+                                        @if($pending > 0)
+                                            <span class="ml-2 px-2 py-1 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700">Pend: {{ $pending }}</span>
+                                        @endif
+                                        @if($projectedCritical)
+                                            <span class="ml-2 px-2 py-1 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700">Proy. bajo</span>
+                                        @endif
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </section>
+        </section>
     </main>
 </div>
 
@@ -305,13 +399,88 @@
                 <button type="submit" class="px-4 py-2 rounded-lg bg-amber-600 text-white text-sm font-semibold shadow-sm">Rechazar</button>
             </form>
         </div>
+        <div id="modal-warn" class="hidden rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+            No aplicable: la cantidad excede el disponible para nuevas asignaciones.
+        </div>
     </div>
 </div>
 
+{{-- Modal de alta de empresa y contratos --}}
+<div id="client-modal" class="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center px-4 hidden">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-xl p-6 space-y-4 border border-slate-200">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm text-slate-500">Nueva empresa</p>
+                <h3 class="text-lg font-semibold text-slate-900">Crear con contrato base</h3>
+            </div>
+            <button id="client-close-modal" class="text-slate-500 hover:text-slate-800">✕</button>
+        </div>
+        <form action="{{ route('admin.clients.store') }}" method="POST" class="space-y-4">
+            @csrf
+            <div>
+                <label class="text-sm text-slate-600">Nombre de la empresa</label>
+                <input type="text" name="name" class="w-full mt-1 rounded-lg border border-slate-200 px-3 py-2 text-sm" required>
+            </div>
+            <div>
+                <label class="text-sm text-slate-600">Nombre del contrato</label>
+                <input type="text" name="contract_name" class="w-full mt-1 rounded-lg border border-slate-200 px-3 py-2 text-sm" placeholder="Ej. Contrato principal" required>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                @foreach (($products ?? collect())->whereIn('name', ['Combustible', 'Despensa', 'Premios']) as $product)
+                    <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                        <p class="text-sm font-semibold text-slate-900">{{ $product->name }}</p>
+                        <label class="text-xs text-slate-500">Límite de contrato</label>
+                        <input type="number" name="limits[{{ $product->name }}]" min="0" class="w-full mt-1 rounded-lg border border-slate-200 px-2 py-1 text-sm" placeholder="Ej. 200">
+                    </div>
+                @endforeach
+            </div>
+            <div class="flex items-center justify-end gap-3">
+                <button type="button" id="client-cancel" class="px-4 py-2 rounded-lg border border-slate-200 text-slate-700 text-sm">Cancelar</button>
+                <button type="submit" class="px-4 py-2 rounded-lg bg-ss-emerald text-white text-sm font-semibold shadow-sm">Crear empresa</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{{-- Modal de alta de contrato --}}
+<div id="contract-modal" class="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center px-4 hidden">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-xl p-6 space-y-4 border border-slate-200">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm text-slate-500">Nuevo contrato</p>
+                <h3 class="text-lg font-semibold text-slate-900">Agregar productos y límite</h3>
+            </div>
+            <button id="contract-close-modal" class="text-slate-500 hover:text-slate-800">✕</button>
+        </div>
+        <form id="contract-form" action="{{ route('admin.clients.store') }}" method="POST" class="space-y-4">
+            @csrf
+            <input type="hidden" name="existing_client" value="1">
+            <input type="hidden" name="client_id" id="contract-client-id">
+            <div>
+                <label class="text-sm text-slate-600">Nombre del contrato</label>
+                <input type="text" name="contract_name" class="w-full mt-1 rounded-lg border border-slate-200 px-3 py-2 text-sm" placeholder="Ej. Contrato adicional" required>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                @foreach (($products ?? collect())->whereIn('name', ['Combustible', 'Despensa', 'Premios']) as $product)
+                    <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                        <p class="text-sm font-semibold text-slate-900">{{ $product->name }}</p>
+                        <label class="text-xs text-slate-500">Límite de contrato</label>
+                        <input type="number" name="limits[{{ $product->name }}]" min="0" class="w-full mt-1 rounded-lg border border-slate-200 px-2 py-1 text-sm" placeholder="Ej. 200">
+                    </div>
+                @endforeach
+            </div>
+            <div class="flex items-center justify-end gap-3">
+                <button type="button" id="contract-cancel" class="px-4 py-2 rounded-lg border border-slate-200 text-slate-700 text-sm">Cancelar</button>
+                <button type="submit" class="px-4 py-2 rounded-lg bg-ss-emerald text-white text-sm font-semibold shadow-sm">Crear contrato</button>
+            </div>
+        </form>
+    </div>
+</div>
 @if ($clientData->isNotEmpty())
 <script>
     const clientsData = @json($clientData);
     const requestsByClient = @json($requestsByClient ?? []);
+    const allRequests = @json($allRequests ?? []);
     (function () {
         const buttons = document.querySelectorAll('[data-client-id]');
         let selectedId = clientsData.length ? clientsData[0].id : null;
@@ -326,6 +495,9 @@
         const requestsContainer = document.getElementById('requests-container');
         const navButtons = document.querySelectorAll('button[data-view]');
         const sections = document.querySelectorAll('[data-section]');
+        const allowedViews = ['empresas', 'solicitudes', 'envios', 'inventario'];
+        const storedView = localStorage.getItem('adminActiveView');
+        const defaultView = allowedViews.includes(storedView) ? storedView : 'empresas';
 
         const modal = document.getElementById('admin-request-modal');
         const modalClose = document.getElementById('admin-close-modal');
@@ -346,11 +518,36 @@
         const approveForm = document.getElementById('modal-approve-form');
         const rejectForm = document.getElementById('modal-reject-form');
         const rejectNoteInput = rejectForm.querySelector('input[name="admin_note"]');
+        const modalWarn = document.getElementById('modal-warn');
+        const listPanel = document.getElementById('client-list');
+        const detailPanel = document.getElementById('client-detail');
+        const backBtn = document.getElementById('back-to-list');
+        const contractsAccordion = document.getElementById('contracts-accordion');
+        const flash = document.getElementById('flash-success');
+        const allRequestsContainer = document.getElementById('all-requests-container');
+        const filterStatus = document.getElementById('filter-status');
+        const filterClient = document.getElementById('filter-client');
+        const clientModal = document.getElementById('client-modal');
+        const openClientModal = document.getElementById('open-client-modal');
+        const closeClientModal = document.getElementById('client-close-modal');
+        const cancelClientModal = document.getElementById('client-cancel');
+        const contractModal = document.getElementById('contract-modal');
+        const contractClose = document.getElementById('contract-close-modal');
+        const contractCancel = document.getElementById('contract-cancel');
+        const contractClientInput = document.getElementById('contract-client-id');
+        const openContractButtons = document.querySelectorAll('[data-open-contract-modal]');
 
         function render(clientId) {
             const client = clientsData.find(c => c.id === clientId);
             if (!client) return;
             selectedId = clientId;
+
+            listPanel.classList.add('hidden');
+            detailPanel.classList.remove('hidden');
+            detailPanel.classList.remove('lg:col-span-2');
+            detailPanel.classList.add('col-span-3');
+            backBtn.classList.remove('hidden');
+            document.querySelectorAll('[data-open-contract-modal]').forEach(btn => btn.setAttribute('data-client-id', client.id));
 
             nameEl.textContent = client.name;
             contractCountEl.textContent = `${client.summary.contracts} contratos`;
@@ -359,23 +556,55 @@
             limitEl.textContent = client.summary.limit;
             availableEl.textContent = client.summary.available;
 
-            contractsBody.innerHTML = '';
+            contractsAccordion.innerHTML = '';
             if (!client.contracts.length) {
-                const row = document.createElement('tr');
-                row.innerHTML = `<td colspan="5" class="px-6 py-4 text-center text-slate-500">Sin contratos asignados.</td>`;
-                contractsBody.appendChild(row);
+                contractsAccordion.innerHTML = `<div class="px-6 py-4 text-center text-slate-500">Sin contratos asignados.</div>`;
             } else {
                 client.contracts.forEach(contract => {
-                    const row = document.createElement('tr');
-                    row.className = 'border-t border-slate-100';
-                    row.innerHTML = `
-                        <td class="px-6 py-3 font-semibold text-slate-900">${contract.product}</td>
-                        <td class="px-6 py-3">${contract.limit}</td>
-                        <td class="px-6 py-3">${contract.current}</td>
-                        <td class="px-6 py-3">${contract.inactive}</td>
-                        <td class="px-6 py-3 text-ss-emerald font-semibold">${contract.available}</td>
+                    const details = document.createElement('details');
+                    details.className = 'group open:bg-slate-50';
+                    details.innerHTML = `
+                        <summary class="flex items-center justify-between px-6 py-4 cursor-pointer">
+                            <div>
+                                <p class="text-sm text-slate-500">Contrato #${contract.id}</p>
+                                <h3 class="text-lg font-semibold text-slate-900">${contract.name || 'Contrato'} · Productos: ${contract.allocations.length}</h3>
+                            </div>
+                            <div class="flex items-center gap-6 text-sm">
+                                <span class="text-slate-600">Límite: <strong>${contract.limit}</strong></span>
+                                <span class="text-slate-600">En uso: <strong>${contract.current}</strong></span>
+                                <span class="text-slate-600">Disponibles: <strong class="text-ss-emerald">${contract.available_new ?? contract.available}</strong></span>
+                            </div>
+                        </summary>
+                        <div class="px-6 pb-6">
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left text-sm text-slate-700">
+                                    <thead class="bg-slate-50 text-slate-500">
+                                        <tr>
+                                            <th class="px-4 py-3">Producto</th>
+                                            <th class="px-4 py-3">Límite</th>
+                                            <th class="px-4 py-3">En uso</th>
+                                            <th class="px-4 py-3">Inactivas</th>
+                                            <th class="px-4 py-3">Vencidas</th>
+                                            <th class="px-4 py-3">Disponible para nuevos</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${contract.allocations.map(allocation => `
+                                            <tr class="border-t border-slate-100">
+                                                <td class="px-4 py-3 font-semibold text-slate-900">${allocation.product}</td>
+                                                <td class="px-4 py-3">${allocation.limit}</td>
+                                                <td class="px-4 py-3">${allocation.current}</td>
+                                                <td class="px-4 py-3">${allocation.inactive}</td>
+                                                <td class="px-4 py-3 text-amber-600 font-semibold">${allocation.expired}</td>
+                                                <td class="px-4 py-3 text-ss-emerald font-semibold">${Math.max(0, allocation.limit - allocation.current - allocation.expired)}</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     `;
-                    contractsBody.appendChild(row);
+                    contractsAccordion.appendChild(details);
                 });
             }
 
@@ -444,6 +673,15 @@
             approveForm.setAttribute('action', `/admin/requests/${req.id}/status`);
             rejectForm.setAttribute('action', `/admin/requests/${req.id}/status`);
 
+            const needWarn = req.reason === 'new_employee' && req.contract_info && req.quantity > req.contract_info.available_new;
+            if (needWarn) {
+                modalWarn.classList.remove('hidden');
+                modalWarn.textContent = 'No aplicable: la cantidad excede el disponible para nuevas asignaciones (considerando inactivas).';
+            } else {
+                modalWarn.classList.add('hidden');
+                modalWarn.textContent = '';
+            }
+
             modal.classList.remove('hidden');
         }
 
@@ -465,31 +703,111 @@
             return text.charAt(0).toUpperCase() + text.slice(1);
         }
 
+        function activateView(view) {
+            navButtons.forEach(b => {
+                const isActive = b.getAttribute('data-view') === view;
+                b.classList.toggle('bg-white/10', isActive);
+                b.classList.toggle('text-white', isActive);
+                b.classList.toggle('text-slate-300', !isActive);
+            });
+            sections.forEach(sec => {
+                if (sec.getAttribute('data-section') === view) {
+                    sec.classList.remove('hidden');
+                } else {
+                    sec.classList.add('hidden');
+                }
+            });
+            localStorage.setItem('adminActiveView', view);
+        }
+
         navButtons.forEach(btn => {
             btn.addEventListener('click', () => {
                 const view = btn.getAttribute('data-view');
-                navButtons.forEach(b => b.classList.remove('bg-white/10', 'text-white'));
-                navButtons.forEach(b => b.classList.add('text-slate-300'));
-                btn.classList.add('bg-white/10', 'text-white');
-                btn.classList.remove('text-slate-300');
-
-                sections.forEach(sec => {
-                    if (sec.getAttribute('data-section') === view) {
-                        sec.classList.remove('hidden');
-                    } else {
-                        sec.classList.add('hidden');
-                    }
-                });
+                activateView(view);
             });
+        });
+
+        activateView(defaultView);
+
+        function renderAllRequests() {
+            if (!allRequestsContainer) return;
+            const statusVal = filterStatus?.value || 'all';
+            const clientVal = filterClient?.value || 'all';
+            const list = allRequests.filter(req => {
+                const matchStatus = statusVal === 'all' || req.status === statusVal;
+                const matchClient = clientVal === 'all' || String(req.client_id) === clientVal;
+                return matchStatus && matchClient;
+            });
+
+            allRequestsContainer.innerHTML = '';
+            if (!list.length) {
+                allRequestsContainer.innerHTML = `<div class="px-6 py-4 text-center text-slate-500">No hay solicitudes con ese filtro.</div>`;
+                return;
+            }
+
+            list.forEach(req => {
+                const row = document.createElement('div');
+                row.className = 'px-6 py-4 flex items-center justify-between cursor-pointer hover:bg-slate-50';
+                row.innerHTML = `
+                    <div class="space-y-1">
+                        <p class="text-sm font-semibold text-slate-900">${req.client_name || 'Empresa'} · Solicitud #${req.id} · ${req.product}</p>
+                        <p class="text-xs text-slate-600">Motivo: ${reasonLabel(req.reason)} · Cantidad: ${req.quantity} · Contrato #${req.contract ?? '-'}</p>
+                        <p class="text-xs text-slate-500">Estado: ${capitalize(req.status)} ${req.admin_note ? ' · Nota: ' + req.admin_note : ''}</p>
+                    </div>
+                    <span class="text-xs px-3 py-1 rounded-full bg-slate-100 text-slate-700">${capitalize(req.status)}</span>
+                `;
+                row.addEventListener('click', () => openModal(req));
+                allRequestsContainer.appendChild(row);
+            });
+        }
+
+        filterStatus?.addEventListener('change', renderAllRequests);
+        filterClient?.addEventListener('change', renderAllRequests);
+        renderAllRequests();
+
+        openContractButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const clientId = btn.getAttribute('data-client-id');
+                if (contractClientInput) contractClientInput.value = clientId;
+                contractModal?.classList.remove('hidden');
+            });
+        });
+
+        const closeContract = () => contractModal?.classList.add('hidden');
+        contractClose?.addEventListener('click', closeContract);
+        contractCancel?.addEventListener('click', closeContract);
+        window.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeContract(); });
+
+        if (flash) {
+            setTimeout(() => flash.classList.add('hidden'), 1000);
+        }
+
+        const openClient = () => clientModal?.classList.remove('hidden');
+        const closeClient = () => clientModal?.classList.add('hidden');
+        openClientModal?.addEventListener('click', openClient);
+        closeClientModal?.addEventListener('click', closeClient);
+        cancelClientModal?.addEventListener('click', closeClient);
+        window.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeClient(); });
+
+        backBtn?.addEventListener('click', () => {
+            listPanel.classList.remove('hidden');
+            detailPanel.classList.add('hidden');
+            detailPanel.classList.remove('col-span-3');
+            detailPanel.classList.add('lg:col-span-2');
+            contractsAccordion.innerHTML = `<div class="px-6 py-4 text-center text-slate-500">Selecciona una empresa para ver sus contratos.</div>`;
+            nameEl.textContent = 'Seleccione una empresa';
+            contractCountEl.textContent = '- contratos';
+            inUseEl.textContent = '-';
+            inactiveEl.textContent = '-';
+            limitEl.textContent = '-';
+            availableEl.textContent = '-';
+            backBtn.classList.add('hidden');
         });
 
         modalClose?.addEventListener('click', closeModal);
         window.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
 
         window.selectClient = render;
-        if (selectedId) {
-            render(selectedId);
-        }
     })();
 </script>
 @endif
